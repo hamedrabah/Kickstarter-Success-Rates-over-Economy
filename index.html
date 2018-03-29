@@ -1,0 +1,409 @@
+<html>
+
+<head>
+	<title>Kickstarter to US Economy</title>
+	<script src="https://d3js.org/d3.v4.min.js"></script>
+	<link rel="stylesheet" type="text/css" href="styles/all.css" media="all"/>
+</head>
+
+<body>
+
+	<h1 class="topPage"> Comparing Kickstarter with the state of the overall economy </h1>
+	<p> A project by Ryan Slama (rms427) and Hamed Rabah (hr277) </p>
+		<!-- <h1 class="sourceMaterial"> US Economy </h1>
+	<h1 class="sourceMaterial"> Kickstarter Projects </h1> -->
+	<script>
+		monthlyData = {}
+		monthlySPData = {}
+		monthlyAverages = {}
+		rawData = {}
+		ksPlotData = []
+
+		d3.csv("ks-projects-201801.csv", function (data) {
+			rawData = data
+			data.forEach(function (project) {
+				// Convert String values to numbers
+				project["ID"] = +project["ID"];
+				project.goal = +project.goal;
+				project.pledged = +project.pledged;
+				project.backers = +project.backers;
+				project["usd pledged"] = +project["usd pledged"];
+				project.backers = +project.backers;
+				project.usd_pledged_real = +project.usd_pledged_real;
+				project.usd_goal_real = +project.usd_goal_real;
+
+				// Convert String values to dates
+				project.deadline = new Date(project.deadline);
+				project.launched = new Date(project.launched);
+
+				// Bin by year and month
+				year = project.deadline.getFullYear()
+				month = project.deadline.getMonth()
+
+				if (!(year in monthlyData)) {
+					monthlyData[year] = {}
+				}
+				if (!(month in monthlyData[year])) {
+					monthlyData[year][month] = []
+				}
+				monthlyData[year][month].push(project)
+			});
+			// Generate average data per month
+			Object.keys(monthlyData).forEach(function (year) {
+
+				monthlyAverages[year] = {}
+				usd_goal_real = 0
+				usd_pledged_real = 0
+				backers = 0
+				funded = 0
+
+				Object.keys(monthlyData[year]).forEach(function (month) {
+					monthlyAverages[year][month] = {}
+
+					usd_goal_real = 0
+					usd_pledged_real = 0
+					backers = 0
+					funded = 0
+
+					monthlyData[year][month].forEach(function (project) {
+						usd_goal_real += project.usd_goal_real
+						usd_pledged_real += project.usd_pledged_real
+						backers += project.backers
+						if (project.pledged > project.goal) {
+							funded += 1;
+						}
+					})
+
+					num = monthlyData[year][month].length
+
+					monthlyAverages[year][month].usd_goal_real = usd_goal_real
+					monthlyAverages[year][month].averageUsd_goal_real = usd_goal_real / num
+					monthlyAverages[year][month].usd_pledged_real = usd_pledged_real
+					monthlyAverages[year][month].averageUsd_pledged_real = usd_pledged_real / num
+					monthlyAverages[year][month].backers = backers
+					monthlyAverages[year][month].averageBackers = backers / num
+					monthlyAverages[year][month].funded = funded
+					monthlyAverages[year][month].percentFunded = funded / num
+
+					var beginning = new Date("1/1/2010");
+					var end = new Date("1/1/2017");
+					humanMonth = Number(month) + 1
+					var currentDate = new Date(humanMonth + "/1/" + year)
+
+					if (currentDate > beginning && currentDate < end) {
+						ksPlotData.push({
+							date: currentDate,
+							usd: usd_pledged_real / num,
+							percentFunded: funded / num,
+							realGoal: usd_goal_real / num
+						})
+					}
+
+				});
+			});
+
+
+			// Data row type
+			// "ID": number
+			// "name": string
+			// "category": string
+			// "main_category": string
+			// "currency": string
+			// "deadline": date
+			// "goal": number
+			// "launched": date
+			// "pledged": number
+			// "state": string
+			// "backers": number
+			// "country": string
+			// "usd pledged": number
+			// "usd_pledged_real": number
+			// "usd_goal_real": number
+			spPlotData = []
+			d3.csv("SPIndex.csv", function (SPData) {
+				SPData.forEach(function (day) {
+					// Convert String values to numbers
+					day.adjclose = +day.adjclose
+					day.close = +day.close
+					day.high = +day.high
+					day.low = +day.low
+					day.volume = +day.volume
+					day.open = +day.open
+
+					// Convert String values to dates
+					day.Date = new Date(day.Date);
+
+					// Bin by year and month
+					year = day.Date.getFullYear()
+					month = day.Date.getMonth()
+
+					if (!(year in monthlySPData)) {
+						monthlySPData[year] = {}
+					}
+					if (!(month in monthlySPData[year])) {
+						monthlySPData[year][month] = []
+					}
+					monthlySPData[year][month].push(day)
+
+					var beginning = new Date("1/1/2010");
+					var end = new Date("1/1/2017");
+
+					if (day.Date > beginning && day.Date < end) {
+						spPlotData.push(day)
+					}
+				});
+
+				// Plotting begins here
+				canvas = d3.select("#canvas")
+
+				var time = d3.scaleTime().domain([new Date("1/1/2010"), new Date("1/1/2017")]).range([0,760])
+				var sp = d3.scaleLinear().domain([0, 2400]).range([580,20])
+				var ks = d3.scaleLinear().domain([0, 15000]).range([580,20])
+				var ps = d3.scaleLinear().domain([0, 1]).range([580,20])
+				var kg = d3.scaleLinear().domain([0, 100000]).range([580,20])
+
+				canvas.append("g")
+					.attr("transform", "translate(60,620)")
+					.call(d3.axisBottom(time))
+					.attr("class", "axis")
+
+				canvas.append("g")
+					.attr("transform", "translate(60,40)")
+					.call(d3.axisLeft(sp))
+					.attr("class", "axis")
+
+				canvas.append("g")
+					.attr("transform", "translate(820,40)")
+					.call(d3.axisRight(ks))
+					.attr("class", "axis")
+
+				var spLine = d3.line()
+					.x(function(d) { return time(d.Date); })
+					.y(function(d) { return sp(d.adjclose); });
+
+				canvas.append("path")
+					.data([spPlotData])
+					.attr("class", "sp")
+					.attr("d", spLine)
+					.attr("fill", "none")
+					.attr("stroke", "lightgreen")
+					.attr("stroke-width", "2")
+					.attr("transform", "translate(60,40)")
+
+				var ksLine = d3.line()
+					.x(function(d) { return time(d.date); })
+					.y(function(d) { return ks(d.usd); });
+
+				canvas.append("path")
+					.data([ksPlotData])
+					.attr("class", "sp")
+					.attr("d", ksLine)
+					.attr("fill", "none")
+					.attr("stroke", "Fuchsia")
+					.attr("stroke-width", "2")
+					.attr("transform", "translate(60,40)")
+
+				canvas.append("text")
+					.attr("transform", "translate(440,660)")
+					.style("text-anchor", "middle")
+					.text("Year")
+					.attr("fill","#cccccc");
+
+				canvas.append("text")
+					.attr("transform", "translate(870,340), rotate(90)")
+					.style("text-anchor", "middle")
+					.text("Kickstarter Average Real USD Pledged")
+					.attr("fill","#cccccc");
+
+				canvas.append("text")
+					.attr("transform", "translate(10,340), rotate(90)")
+					.style("text-anchor", "middle")
+					.text("S&P 500 Index")
+					.attr("fill","#cccccc");
+
+
+				canvas2 = d3.select("#canvas2")
+
+				canvas2.append("g")
+					.attr("transform", "translate(60,620)")
+					.call(d3.axisBottom(time))
+					.attr("class", "axis")
+
+				canvas2.append("g")
+					.attr("transform", "translate(60,40)")
+					.call(d3.axisLeft(sp))
+					.attr("class", "axis")
+
+				canvas2.append("path")
+					.data([spPlotData])
+					.attr("class", "sp")
+					.attr("d", spLine)
+					.attr("fill", "none")
+					.attr("stroke", "lightgreen")
+					.attr("stroke-width", "2")
+					.attr("transform", "translate(60,40)")
+
+				canvas2.append("text")
+					.attr("transform", "translate(440,660)")
+					.style("text-anchor", "middle")
+					.text("Year")
+					.attr("fill","#cccccc");
+
+				canvas2.append("text")
+					.attr("transform", "translate(10,340), rotate(90)")
+					.style("text-anchor", "middle")
+					.text("S&P 500 Index")
+					.attr("fill","#cccccc")
+
+				var percentFundedLine = d3.line()
+					.x(function(d) { return time(d.date); })
+					.y(function(d) { return ps(d.percentFunded); });
+
+				canvas2.append("path")
+					.data([ksPlotData])
+					.attr("class", "sp")
+					.attr("d", percentFundedLine)
+					.attr("fill", "none")
+					.attr("stroke", "lightblue")
+					.attr("stroke-width", "2")
+					.attr("transform", "translate(60,40)")
+
+				canvas2.append("g")
+					.attr("transform", "translate(820,40)")
+					.call(d3.axisRight(ps))
+					.attr("class", "axis")
+
+				canvas2.append("text")
+					.attr("transform", "translate(870,340), rotate(90)")
+					.style("text-anchor", "middle")
+					.text("Kickstarter Monthly Percent Funded")
+					.attr("fill","#cccccc");
+
+				canvas3 = d3.select("#canvas3")
+
+				canvas3.append("g")
+					.attr("transform", "translate(60,620)")
+					.call(d3.axisBottom(time))
+					.attr("class", "axis")
+
+				canvas3.append("g")
+					.attr("transform", "translate(60,40)")
+					.call(d3.axisLeft(sp))
+					.attr("class", "axis")
+
+				canvas3.append("path")
+					.data([spPlotData])
+					.attr("class", "sp")
+					.attr("d", spLine)
+					.attr("fill", "none")
+					.attr("stroke", "lightgreen")
+					.attr("stroke-width", "2")
+					.attr("transform", "translate(60,40)")
+
+				canvas3.append("text")
+					.attr("transform", "translate(440,660)")
+					.style("text-anchor", "middle")
+					.text("Year")
+					.attr("fill","#cccccc");
+
+				canvas3.append("text")
+					.attr("transform", "translate(10,340), rotate(90)")
+					.style("text-anchor", "middle")
+					.text("S&P 500 Index")
+					.attr("fill","#cccccc")
+
+				var realGoalLine = d3.line()
+					.x(function(d) { return time(d.date); })
+					.y(function(d) { return kg(d.realGoal); });
+
+				var smoothRealGoalLine = d3.line()
+					.curve(d3.curveBundle.beta(0.75))
+					.x(function(d) { return time(d.date); })
+					.y(function(d) { return kg(d.realGoal); });
+
+				canvas3.append("path")
+					.data([ksPlotData])
+					.attr("class", "sp")
+					.attr("d", realGoalLine)
+					.attr("fill", "none")
+					.attr("stroke", "Salmon")
+					.attr("stroke-width", "2")
+					.attr("transform", "translate(60,40)")
+
+				canvas3.append("path")
+					.data([ksPlotData])
+					.attr("class", "sp")
+					.attr("d", smoothRealGoalLine)
+					.attr("fill", "none")
+					.attr("stroke", "Cyan")
+					.attr("stroke-width", "2")
+					.attr("transform", "translate(60,40)")
+
+				canvas3.append("g")
+					.attr("transform", "translate(820,40)")
+					.call(d3.axisRight(kg))
+					.attr("class", "axis")
+
+				canvas3.append("text")
+					.attr("transform", "translate(870,340), rotate(90)")
+					.style("text-anchor", "middle")
+					.text("Kickstarter Average Real Goal")
+					.attr("fill","#cccccc");
+
+
+			});
+		});
+	</script>
+	<h1 class="newMaterial"> Economy &amp; Kickstarter Projects </h1>
+	<p class="desc">We chose to analyse whether or not the state of the current economy would change the amount of money being pledged to Kickstarter projects. As an indicator for the current state of the economy, we will be using the adjusted close price of the S&amp;P 500 index. We will start by comparing it to the average amount of real USD pledged to the average Kickstarter project by month.</p>
+	<svg id="canvas" width="880" height="680"></svg>
+	<div id="label1" class="labelDiv">
+		<h1 class="newMaterial">S&amp;P 500 &amp; Kickstarter Projects </h1>
+		<svg class="legendSVG" width="400" height="180">
+			<rect x="0" y="0" rx="5" ry="5" width="50" height="50"
+			style="fill:lightgreen;stroke:black;stroke-width:1;" />
+			<text x="100" y="35" fill="white" >S&amp;P 500</text>
+			<rect x="0" y="90" rx="5" ry="5" width="50" height="50"
+			style="fill:Fuchsia;stroke:black;stroke-width:1;" />
+			<text x="100" y="130" fill="white">USD Pledged</text>
+		</svg>
+	</div>
+	<p class="desc">Interestingly, even as the amount pledged to the average project increased, the percent of projects that hit their goal and recieved funding <strong>did not</strong> grow. In fact, the percent is lower at the end of 2017 than any time before 2014 (see chart 2). One reason for this might be that as the S&amp;P 500 grew, project goals became more ambitious (see chart 3).</p>
+
+
+	<svg id="canvas2" width="880" height="680"></svg>
+	<div id="label2" class="labelDiv">
+	<h1  class="newMaterial"> Percent Funded vs. S&amp;P 500 </h1>
+	<svg class="legendSVG" width="400" height="180">
+		<rect x="0" y="0" rx="5" ry="5" width="50" height="50"
+		style="fill:lightgreen;stroke:black;stroke-width:1;" />
+		<text x="100" y="35" fill="white" >S&amp;P 500</text>
+		<rect x="0" y="90" rx="5" ry="5" width="50" height="50"
+		style="fill:lightblue;stroke:black;stroke-width:1;" />
+		<text x="60" y="130" fill="white">% Projects Funded</text>
+	</svg>
+	</div>
+	<p class="desc">Generally the greater the state of the economy as indicated by the S&amp;P 500, the more ambitious projects became in terms of the amount of their average real goal. </p>
+	<svg id="canvas3" width="880" height="680"></svg>
+
+	<div id="label3" class="labelDiv">
+		<h1 class="newMaterial"> Real USD Goals vs. S&amp;P 500 </h1>
+
+		<svg class="legendSVG" width="400" height="280">
+			<rect x="0" y="0" rx="5" ry="5" width="50" height="50"
+			style="fill:lightgreen;stroke:black;stroke-width:1;" />
+			<text x="100" y="35" fill="white" >S&amp;P 500</text>
+			<rect x="0" y="90" rx="5" ry="5" width="50" height="50"
+			style="fill:salmon;stroke:black;stroke-width:1;" />
+			<text x="100" y="130" fill="white" >Average Goal</text>
+			<rect x="0" y="185" rx="5" ry="5" width="50" height="50"
+			style="fill:cyan;stroke:black;stroke-width:1;" />
+			<text x="100" y="220" fill="white">Normalized</text>
+
+		</svg>
+	</div>
+
+
+</body>
+
+</html>
